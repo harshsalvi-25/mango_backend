@@ -3,15 +3,12 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.keras.preprocessing import image
 from io import BytesIO
-import os
 
 app = Flask(__name__)
 
 # ============================
-# CONFIG
+# CLASS LABELS
 # ============================
-
-MODEL_PATH = "mango_model.keras"
 
 CLASS_NAMES = [
     "Anthracnose",
@@ -25,18 +22,19 @@ CLASS_NAMES = [
 ]
 
 # ============================
-# LAZY LOAD MODEL
+# GLOBAL TFLITE INTERPRETER
 # ============================
 
-model = None
+interpreter = None
 
-def get_model():
-    global model
-    if model is None:
-        print("🔄 Loading Mango model...")
-        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-        print("✅ Mango model loaded")
-    return model
+def get_interpreter():
+    global interpreter
+    if interpreter is None:
+        print("🔄 Loading TFLite model...")
+        interpreter = tf.lite.Interpreter(model_path="mango_model.tflite")
+        interpreter.allocate_tensors()
+        print("✅ TFLite model loaded")
+    return interpreter
 
 # ============================
 # SENSOR STORAGE
@@ -77,7 +75,7 @@ def analyze_risk(temp, humidity, moisture):
     return risks
 
 # ============================
-# PRECAUTIONARY MEASURES
+# PRECAUTIONS
 # ============================
 
 PRECAUTIONS = {
@@ -113,19 +111,15 @@ PRECAUTIONS = {
 
 @app.route("/")
 def home():
-    return "Mango Backend Running"
+    return "Mango Backend Running (TFLite)"
 
-# ---------- SENSOR DATA ----------
 @app.route("/sensor", methods=["POST"])
 def receive_sensor():
-
     latest_sensor["temperature"] = float(request.form.get("temperature"))
     latest_sensor["humidity"] = float(request.form.get("humidity"))
     latest_sensor["moisture"] = float(request.form.get("moisture"))
-
     return jsonify({"status": "sensor data received"})
 
-# ---------- IMAGE PREDICTION ----------
 @app.route("/predict", methods=["POST"])
 def predict():
 
@@ -137,16 +131,20 @@ def predict():
     img = image.load_img(BytesIO(image_file.read()), target_size=(224,224))
     img_array = image.img_to_array(img)
     img_array = img_array / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
+    img_array = np.expand_dims(img_array, axis=0).astype(np.float32)
 
-    m = get_model()
-    pred = m.predict(img_array)
+    interpreter = get_interpreter()
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    interpreter.set_tensor(input_details[0]['index'], img_array)
+    interpreter.invoke()
+    pred = interpreter.get_tensor(output_details[0]['index'])
 
     idx = int(np.argmax(pred))
     confidence = float(pred[0][idx])
     label = CLASS_NAMES[idx]
 
-    # Healthy safeguard
     if confidence < 0.60:
         label = "Healthy"
 
@@ -167,8 +165,6 @@ def predict():
         "risk": risk,
         "precautions": precautions
     })
-
-# ============================
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
