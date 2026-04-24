@@ -244,7 +244,7 @@ TREATMENT = {
         "pesticide": [
             {
                 "name": "Not Required",
-                "image": "https://5.imimg.com/data5/EM/DN/MY-35706761/hapus-mango.jpg"
+                "image": "https://img.freepik.com/premium-vector/no-action-required-red-rubber-stamp-with-text-white-background_545399-3715.jpg"
             }
         ],
         "fertilizer": [
