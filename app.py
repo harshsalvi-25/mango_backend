@@ -294,10 +294,7 @@ def predict():
     idx = int(np.argmax(pred))
     confidence = float(pred[0][idx])
     label = CLASS_NAMES[idx]
-
-    if confidence < 0.60:
-        label = "Healthy"
-
+    
     confidence = round(confidence * 100, 2)
 
     risk = analyze_risk(
